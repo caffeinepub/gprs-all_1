@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 // ===== MODULE-LEVEL MUTABLE STATE (matching original JS) =====
 let currentLat = 17.068839;
@@ -6,6 +6,8 @@ let currentLon = 79.258973;
 let zoom = 15;
 let serialNumber = 1;
 let lastRefGenerationTime = Date.now();
+let currentMapMode: "google" | "satellite" | "3d" | "globe" = "google";
+let isMaxMap = true;
 
 const HYDERABAD_COORDS = { lat: 17.385044, lon: 78.486671 };
 const NALGONDA_COORDS = { lat: 17.0562, lon: 79.267899 };
@@ -41,8 +43,18 @@ function getGoogleMapsEmbedUrl(
   lat: number,
   lon: number,
   zoomLevel: number,
+  satellite = false,
 ): string {
-  return `https://www.google.com/maps?q=${lat},${lon}&hl=en&z=${zoomLevel}&output=embed`;
+  const t = satellite ? "&t=k" : "";
+  return `https://www.google.com/maps?q=${lat},${lon}&hl=en&z=${zoomLevel}${t}&output=embed`;
+}
+
+function getGoogleEarth3DUrl(lat: number, lon: number): string {
+  return `https://earth.google.com/web/@${lat.toFixed(6)},${lon.toFixed(6)},0a,800d,35y,0h,0t,0r`;
+}
+
+function getGoogleEarthGlobeUrl(lat: number, lon: number): string {
+  return `https://earth.google.com/web/@${lat.toFixed(6)},${lon.toFixed(6)},0a,12000000d,35y,0h,0t,0r`;
 }
 
 function formatIndianPin(pin: string | undefined | null): string {
@@ -64,7 +76,6 @@ function safeUpper(text: string): string {
 function translateToEnglish(text: string): string {
   if (!text) return text;
   let translated = text;
-  // Remove non-ASCII characters (e.g. Hindi/Devanagari script)
   // biome-ignore lint/suspicious/noControlCharactersInRegex: intentionally removing non-ASCII chars
   translated = translated.replace(/[^\u0020-\u007E]/g, " ");
   translated = translated.replace(/\s+/g, " ").trim();
@@ -101,9 +112,7 @@ function formatFullIndiaAddress(address: Record<string, string>): string {
   const districtEng = translateToEnglish(district || "");
   const stateEng = translateToEnglish(state || "");
   const parts: string[] = [];
-  if (villageEng?.trim()) {
-    parts.push(`${safeUpper(villageEng)} VILLAGE`);
-  }
+  if (villageEng?.trim()) parts.push(`${safeUpper(villageEng)} VILLAGE`);
   if (mandalEng?.trim()) {
     const cleanMandal = mandalEng.toUpperCase().replace(/\s+MANDAL$/, "");
     parts.push(`${cleanMandal} MANDAL`);
@@ -118,9 +127,7 @@ function formatFullIndiaAddress(address: Record<string, string>): string {
   }
   if (parts.length === 0 && address.display_name) {
     const displayName = translateToEnglish(address.display_name);
-    if (displayName?.trim()) {
-      parts.push(safeUpper(displayName));
-    }
+    if (displayName?.trim()) parts.push(safeUpper(displayName));
   }
   let out =
     parts.length > 0 ? parts.join(", ") : "Location details not available.";
@@ -278,6 +285,21 @@ function updateSiteLocationDisplay() {
   if (bhuvanCoordsValue) bhuvanCoordsValue.textContent = coords;
 }
 
+function updateMapButtonStates() {
+  const googleBtn = document.getElementById("googleBtn");
+  const satelliteBtn = document.getElementById("satelliteBtn");
+  const view3dBtn = document.getElementById("view3dBtn");
+  const bhuvanBtn = document.querySelector(".btn.bhuvan-rainbow");
+  const globeBtn = document.getElementById("globeBtn");
+  if (googleBtn)
+    googleBtn.classList.toggle("active", currentMapMode === "google");
+  if (satelliteBtn)
+    satelliteBtn.classList.toggle("active", currentMapMode === "satellite");
+  if (view3dBtn) view3dBtn.classList.toggle("active", currentMapMode === "3d");
+  if (globeBtn) globeBtn.classList.toggle("active", currentMapMode === "globe");
+  if (bhuvanBtn) (bhuvanBtn as HTMLElement).classList.remove("active");
+}
+
 function updateGoogleMap(lat: number, lon: number, zoomLevel: number = zoom) {
   currentLat = lat;
   currentLon = lon;
@@ -285,7 +307,8 @@ function updateGoogleMap(lat: number, lon: number, zoomLevel: number = zoom) {
   const iframe = document.getElementById("mapFrame") as HTMLIFrameElement;
   if (!iframe) return true;
   iframe.style.opacity = "0.5";
-  const embedUrl = getGoogleMapsEmbedUrl(lat, lon, zoomLevel);
+  const isSatellite = currentMapMode === "satellite";
+  const embedUrl = getGoogleMapsEmbedUrl(lat, lon, zoomLevel, isSatellite);
   iframe.src = embedUrl;
   setTimeout(() => {
     iframe.style.opacity = "1";
@@ -297,11 +320,104 @@ function updateGoogleMap(lat: number, lon: number, zoomLevel: number = zoom) {
   updateSiteLocationDisplay();
   fetchLocationFromCoords();
   calculateDistances();
-  const googleBtn = document.getElementById("googleBtn");
-  const bhuvanBtn = document.querySelector(".btn.bhuvan-rainbow");
-  if (googleBtn) googleBtn.classList.add("active");
-  if (bhuvanBtn) bhuvanBtn.classList.remove("active");
   return true;
+}
+
+function showGoogleMap() {
+  const input = (
+    document.getElementById("coordsInput") as HTMLInputElement
+  ).value.trim();
+  const parts = input.split(",");
+  let lat = currentLat;
+  let lon = currentLon;
+  if (parts.length >= 2) {
+    const parsedLat = Number.parseFloat(parts[0].trim());
+    const parsedLon = Number.parseFloat(parts[1].trim());
+    if (!Number.isNaN(parsedLat) && !Number.isNaN(parsedLon)) {
+      lat = parsedLat;
+      lon = parsedLon;
+    }
+  }
+  currentMapMode = "google";
+  updateGoogleMap(lat, lon);
+  updateMapButtonStates();
+}
+
+function showSatelliteMap() {
+  const input = (
+    document.getElementById("coordsInput") as HTMLInputElement
+  ).value.trim();
+  const parts = input.split(",");
+  let lat = currentLat;
+  let lon = currentLon;
+  if (parts.length >= 2) {
+    const parsedLat = Number.parseFloat(parts[0].trim());
+    const parsedLon = Number.parseFloat(parts[1].trim());
+    if (!Number.isNaN(parsedLat) && !Number.isNaN(parsedLon)) {
+      lat = parsedLat;
+      lon = parsedLon;
+    }
+  }
+  currentMapMode = "satellite";
+  currentLat = lat;
+  currentLon = lon;
+  const iframe = document.getElementById("mapFrame") as HTMLIFrameElement;
+  if (iframe) {
+    iframe.style.opacity = "0.5";
+    iframe.src = getGoogleMapsEmbedUrl(lat, lon, zoom, true);
+    setTimeout(() => {
+      iframe.style.opacity = "1";
+    }, 250);
+  }
+  updateSiteLocationDisplay();
+  updateMapButtonStates();
+  showNotification("Satellite view", "success");
+}
+
+function show3DMap() {
+  const input = (
+    document.getElementById("coordsInput") as HTMLInputElement
+  ).value.trim();
+  const parts = input.split(",");
+  let lat = currentLat;
+  let lon = currentLon;
+  if (parts.length >= 2) {
+    const parsedLat = Number.parseFloat(parts[0].trim());
+    const parsedLon = Number.parseFloat(parts[1].trim());
+    if (!Number.isNaN(parsedLat) && !Number.isNaN(parsedLon)) {
+      lat = parsedLat;
+      lon = parsedLon;
+    }
+  }
+  currentLat = lat;
+  currentLon = lon;
+  const url3d = getGoogleEarth3DUrl(lat, lon);
+  const newWin = window.open(url3d, "_blank", "noopener,noreferrer");
+  if (!newWin) showNotification("Allow popups to open Google Earth", "error");
+  else showNotification("Opening 3D view in new tab", "success");
+}
+
+function showGlobeView() {
+  const input = (
+    document.getElementById("coordsInput") as HTMLInputElement
+  ).value.trim();
+  const parts = input.split(",");
+  let lat = currentLat;
+  let lon = currentLon;
+  if (parts.length >= 2) {
+    const parsedLat = Number.parseFloat(parts[0].trim());
+    const parsedLon = Number.parseFloat(parts[1].trim());
+    if (!Number.isNaN(parsedLat) && !Number.isNaN(parsedLon)) {
+      lat = parsedLat;
+      lon = parsedLon;
+    }
+  }
+  currentLat = lat;
+  currentLon = lon;
+  const urlGlobe = getGoogleEarthGlobeUrl(lat, lon);
+  const newWin = window.open(urlGlobe, "_blank", "noopener,noreferrer");
+  if (!newWin) showNotification("Allow popups to open Globe view", "error");
+  else showNotification("Opening Globe view in new tab", "success");
 }
 
 async function getLocation() {
@@ -370,24 +486,6 @@ async function getLocationByIP() {
   }
 }
 
-function showGoogleMap() {
-  const input = (
-    document.getElementById("coordsInput") as HTMLInputElement
-  ).value.trim();
-  const parts = input.split(",");
-  let lat = currentLat;
-  let lon = currentLon;
-  if (parts.length >= 2) {
-    const parsedLat = Number.parseFloat(parts[0].trim());
-    const parsedLon = Number.parseFloat(parts[1].trim());
-    if (!Number.isNaN(parsedLat) && !Number.isNaN(parsedLon)) {
-      lat = parsedLat;
-      lon = parsedLon;
-    }
-  }
-  updateGoogleMap(lat, lon);
-}
-
 function openBhuvanMap() {
   const input = (
     document.getElementById("coordsInput") as HTMLInputElement
@@ -404,8 +502,15 @@ function openBhuvanMap() {
   updateSiteLocationDisplay();
   const googleBtn = document.getElementById("googleBtn");
   const bhuvanBtn = document.querySelector(".btn.bhuvan-rainbow");
+  const satelliteBtn = document.getElementById("satelliteBtn");
+  const view3dBtn = document.getElementById("view3dBtn");
   if (bhuvanBtn) bhuvanBtn.classList.add("active");
   if (googleBtn) googleBtn.classList.remove("active");
+  if (satelliteBtn) satelliteBtn.classList.remove("active");
+  if (view3dBtn) view3dBtn.classList.remove("active");
+  const globeBtnB = document.getElementById("globeBtn");
+  if (globeBtnB) globeBtnB.classList.remove("active");
+  currentMapMode = "google"; // reset mode tracking but keep bhuvan btn active visually
   const coords = `${currentLat.toFixed(6)}, ${currentLon.toFixed(6)}`;
   navigator.clipboard
     .writeText(coords)
@@ -668,7 +773,7 @@ function copyWhatsHereDetails() {
 }
 
 function zoomIn() {
-  if (zoom < 16) {
+  if (zoom < 20) {
     zoom++;
     updateGoogleMap(currentLat, currentLon, zoom);
   } else showNotification("Max zoom", "info");
@@ -684,6 +789,24 @@ function zoomOut() {
 // ===== REACT COMPONENT =====
 
 export default function App() {
+  // Use React state so the class is applied from the very first render (no flash)
+  const [maxMap, setMaxMap] = useState(true);
+
+  const handleToggleMaxMap = () => {
+    isMaxMap = !isMaxMap;
+    setMaxMap(isMaxMap);
+    const btn = document.getElementById("maxMapBtn");
+    const floatingBtn = document.getElementById("floatingToggleBtn");
+    if (btn) {
+      btn.textContent = isMaxMap ? "⬅️ Show Panel" : "⛶ Max Map";
+      btn.classList.toggle("active", isMaxMap);
+    }
+    if (floatingBtn) {
+      floatingBtn.title = isMaxMap ? "Show Panel" : "Max Map";
+    }
+    showNotification(isMaxMap ? "Map maximized" : "Panel restored", "info");
+  };
+
   useEffect(() => {
     const draggableElements = [
       "refDisplay",
@@ -699,6 +822,14 @@ export default function App() {
     generateReferenceNumber();
     updateRefDisplay();
     updateSiteLocationDisplay();
+
+    // Update button text to match the initial max-map state
+    const maxBtn = document.getElementById("maxMapBtn");
+    if (maxBtn) {
+      maxBtn.textContent = "⬅️ Show Panel";
+      maxBtn.classList.add("active");
+    }
+
     setTimeout(() => {
       fetchLocationFromCoords();
       calculateDistances();
@@ -707,7 +838,7 @@ export default function App() {
 
   return (
     <>
-      <div className="container">
+      <div className={`container${maxMap ? " max-map" : ""}`}>
         {/* Left Panel (Sidebar) */}
         <div className="left-panel">
           <div className="title-section">
@@ -805,6 +936,43 @@ export default function App() {
             >
               🛰️ Bhuvan Map
             </button>
+            <button
+              type="button"
+              className="btn satellite"
+              id="satelliteBtn"
+              onClick={showSatelliteMap}
+              data-ocid="satellite_map.button"
+            >
+              🌍 Satellite
+            </button>
+            <button
+              type="button"
+              className="btn view-3d"
+              id="view3dBtn"
+              onClick={show3DMap}
+              data-ocid="view3d_map.button"
+            >
+              🌐 3D View
+            </button>
+            <button
+              type="button"
+              className="btn globe-view"
+              id="globeBtn"
+              onClick={showGlobeView}
+              data-ocid="globe_view.button"
+            >
+              🌍 Globe View
+            </button>
+            <button
+              type="button"
+              className="btn max-map-btn"
+              id="maxMapBtn"
+              onClick={handleToggleMaxMap}
+              data-ocid="max_map.button"
+              style={{ gridColumn: "span 2" }}
+            >
+              ⬅️ Show Panel
+            </button>
           </div>
 
           <div className="input-group">
@@ -841,8 +1009,20 @@ export default function App() {
               src="https://www.google.com/maps?q=17.068839,79.258973&hl=en&z=15&output=embed"
               allowFullScreen
               loading="lazy"
-              title="Google Maps"
+              title="Map Viewer"
             />
+
+            {/* Floating Toggle Button - always visible on the map */}
+            <button
+              type="button"
+              id="floatingToggleBtn"
+              className="floating-toggle-btn"
+              onClick={handleToggleMaxMap}
+              title="Show Panel"
+              data-ocid="floating_toggle.button"
+            >
+              ☰
+            </button>
 
             {/* Draggable Info Displays */}
             <div className="ref-display" id="refDisplay">

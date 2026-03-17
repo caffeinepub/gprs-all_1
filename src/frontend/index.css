@@ -96,40 +96,55 @@
   -webkit-touch-callout: none;
 }
 
-html, body {
+html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
   width: 100%;
   height: 100%;
   overflow: hidden;
   touch-action: manipulation;
-}
-
-body {
-  display: flex;
-  min-height: 100vh;
-  height: 100%;
   background: linear-gradient(135deg, #1a2a3a, #0d1b2a);
   color: var(--text-color);
   padding: 0;
-  overflow: hidden;
+  margin: 0;
 }
 
 #root {
   width: 100%;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .container {
   width: 100%;
-  height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: row;
   overflow: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Max map mode - hide left panel */
+.container.max-map .left-panel {
+  display: none;
+}
+
+.container.max-map .map-section {
+  width: 100%;
+  flex: 1;
 }
 
 .left-panel {
   width: 300px;
   min-width: 300px;
+  flex-shrink: 0;
   background: #ffffff;
   border-right: 1px solid rgba(0, 0, 0, 0.12);
   display: flex;
@@ -142,6 +157,7 @@ body {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+  height: 100%;
 }
 
 .left-panel::-webkit-scrollbar {
@@ -313,13 +329,51 @@ h1 {
   background: linear-gradient(to right, #E91E63, #C2185B);
 }
 
+/* Satellite button */
+.btn.satellite {
+  background: linear-gradient(to right, #546E7A, #37474F);
+}
+
+.btn.satellite.active {
+  background: linear-gradient(to right, #0078d7, #0066b3);
+}
+
+/* 3D View button */
+.btn.view-3d {
+  background: linear-gradient(to right, #5D4037, #4E342E);
+}
+
+.btn.view-3d.active {
+  background: linear-gradient(to right, #0078d7, #0066b3);
+}
+
+/* Globe View button */
+.btn.globe-view {
+  background: linear-gradient(to right, #1565C0, #0D47A1);
+}
+
+.btn.globe-view.active {
+  background: linear-gradient(to right, #0078d7, #0066b3);
+}
+
+/* Max Map button */
+.btn.max-map-btn {
+  background: linear-gradient(to right, #FF5722, #E64A19);
+}
+
+.btn.max-map-btn.active {
+  background: linear-gradient(to right, #0078d7, #0066b3);
+}
+
 .map-section {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-width: 0;
   min-height: 0;
-  height: 100vh;
+  height: 100%;
   position: relative;
+  overflow: hidden;
 }
 
 .map-wrapper {
@@ -327,15 +381,18 @@ h1 {
   flex: 1;
   width: 100%;
   height: 100%;
+  min-height: 0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   border-radius: 0;
   overflow: hidden;
   background: #1e1e1e;
-  min-height: 0;
   touch-action: pan-x pan-y;
 }
 
-iframe {
+iframe#mapFrame {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   border: none;
@@ -479,6 +536,45 @@ iframe {
 
 .zoom-btn:active {
   transform: scale(0.95);
+}
+
+/* Floating toggle button for max-map mode */
+.floating-toggle-btn {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1001;
+  background: rgba(13, 27, 42, 0.9);
+  color: white;
+  border: 2px solid #4CAF50;
+  border-radius: 8px;
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(5px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  transition: all 0.2s;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+.floating-toggle-btn:hover {
+  background: rgba(30, 50, 70, 0.95);
+  transform: scale(1.05);
+}
+
+.floating-toggle-btn:active {
+  transform: scale(0.95);
+}
+
+/* Hide floating button when panel is shown (not max-map mode) */
+.container:not(.max-map) .floating-toggle-btn {
+  display: none;
 }
 
 .notification {
@@ -862,6 +958,12 @@ iframe {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
+.site-location-label {
+  font-size: 11px;
+  color: rgba(255,255,255,0.6);
+  margin-top: 4px;
+}
+
 @media (max-width: 768px) {
   .container {
     flex-direction: column;
@@ -871,12 +973,15 @@ iframe {
     width: 100%;
     min-width: 100%;
     height: auto;
-    max-height: 50vh;
+    max-height: 50%;
     overflow-y: auto;
+    flex-shrink: 0;
   }
 
   .map-section {
-    height: 50vh;
+    flex: 1;
+    height: auto;
+    min-height: 0;
   }
 
   .button-grid {
